@@ -20,7 +20,7 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-    
+
     @Bean
     public JwtFilter jwtFilter() {
         return new JwtFilter();
@@ -38,13 +38,23 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Endpoints públicos de autenticación
                 .requestMatchers("/auth/**", "/oauth2/**", "/login**", "/error**").permitAll()
+
+                // Formulario público de suscripción (newsletter, beta testing, focus group, simmer challenge)
+                .requestMatchers(HttpMethod.POST, "/nodos/subscriptions/create").permitAll()
+
                 // GET públicos - lectura de catálogos
                 .requestMatchers(HttpMethod.GET, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").permitAll()
+
                 // Endpoints protegidos para admins
                 .requestMatchers(HttpMethod.POST, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").hasRole("ADMIN")
+
+                // Suscripciones: solo ADMIN puede listar, ver, actualizar o borrar
+                .requestMatchers("/nodos/subscriptions/**").hasRole("ADMIN")
+
                 .requestMatchers("/nodos/Users/**").hasRole("ADMIN") // Por simplicidad, solo admin gestiona usuarios o podrías limitarlo a ellos mismos después
+
                 // Cart y Buys requieren autenticación (USER o ADMIN)
                 .requestMatchers("/nodos/cart/**", "/nodos/buys/**").authenticated()
                 // Resto de operaciones requieren autenticación
