@@ -4,6 +4,7 @@ import java.util.Date;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.nodo.retotecnico.model.Buy;
@@ -21,6 +22,8 @@ import com.nodo.retotecnico.service.BuysService;
 
 @Service
 public class BuysServiceImpl implements BuysService{
+
+    private static final String ADMIN_ROLE = "ROLE_ADMIN";
 
     @Autowired
     private BuysRepository buysRepository;
@@ -54,6 +57,14 @@ public class BuysServiceImpl implements BuysService{
     
     @Override
     public Integer createBuy(Buy buy) {
+        if (buy == null || buy.getCart() == null || buy.getCart().getUser() == null || buy.getCart().getUser().getId() == null) {
+            throw new RuntimeException("Cart user is required");
+        }
+
+        User user = userRepository.findById(buy.getCart().getUser().getId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        validateUserCanPurchase(user);
+
         return buysRepository.save(buy).getId();
     }
 
@@ -80,6 +91,8 @@ public class BuysServiceImpl implements BuysService{
     public Buy createDirectBuy(Integer userId, Integer expansionId, Integer platformId, String paymentMethod) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        validateUserCanPurchase(user);
         
         ExpansionPack expansion = expansionRepository.findById(expansionId)
                 .orElseThrow(() -> new RuntimeException("Expansion not found"));
@@ -116,6 +129,8 @@ public class BuysServiceImpl implements BuysService{
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        validateUserCanPurchase(user);
+
         Cart activeCart = cartRepository.findByUserIdAndStatus(userId, "activo")
                 .orElseThrow(() -> new RuntimeException("No active cart found"));
 
@@ -142,6 +157,12 @@ public class BuysServiceImpl implements BuysService{
         cartRepository.save(newCart);
 
         return savedBuy;
+    }
+
+    private void validateUserCanPurchase(User user) {
+        if (user.getRole() != null && ADMIN_ROLE.equalsIgnoreCase(user.getRole())) {
+            throw new AccessDeniedException("Admin users cannot make purchases");
+        }
     }
 }
 

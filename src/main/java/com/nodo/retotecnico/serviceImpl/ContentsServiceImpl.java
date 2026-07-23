@@ -40,7 +40,7 @@ public class ContentsServiceImpl implements ContentsService{
     }
     @Override
     public void deleteContent(Integer id){
-        if (contentsRepository.existsById(id)){
+        if (!contentsRepository.existsById(id)){
             throw new RuntimeException("Content not found");
         }
         contentsRepository.deleteById(id);

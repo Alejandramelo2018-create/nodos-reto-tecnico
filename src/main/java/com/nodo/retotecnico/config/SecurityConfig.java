@@ -74,6 +74,16 @@ public class SecurityConfig {
 
                 .requestMatchers("/nodos/Users/**").hasRole("ADMIN") // Por simplicidad, solo admin gestiona usuarios o podrías limitarlo a ellos mismos después
 
+                
+                // Permitir GET público
+                .requestMatchers(HttpMethod.GET, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").permitAll()
+                
+                // Endpoints protegidos para admins: crear, actualizar, borrar
+                .requestMatchers(HttpMethod.POST, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").hasRole("ADMIN")
+                
+                .requestMatchers("/nodos/users/**").hasRole("ADMIN") // Solo admin gestiona usuarios
                 // Cart y Buys requieren autenticación (USER o ADMIN)
                 .requestMatchers("/nodos/cart/**", "/nodos/buys/**").authenticated()
                 // Resto de operaciones requieren autenticación

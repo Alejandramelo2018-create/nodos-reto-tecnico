@@ -18,10 +18,8 @@ import com.nodo.retotecnico.dto.AuthResponse;
 import com.nodo.retotecnico.dto.LoginRequest;
 import com.nodo.retotecnico.dto.OAuth2Response;
 import com.nodo.retotecnico.dto.RegisterRequest;
-import com.nodo.retotecnico.model.User;
-import com.nodo.retotecnico.repository.UserRepository;
 import com.nodo.retotecnico.security.JwtUtil;
-import com.nodo.retotecnico.serviceImpl.UsersServiceImpl;
+import com.nodo.retotecnico.service.UsersService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -33,31 +31,14 @@ public class AuthController {
     private JwtUtil jwtUtil;
 
     @Autowired
-    private UsersServiceImpl usersService;
-
-    @Autowired
-    private UserRepository userRepository;
+    private UsersService usersService;
 
     @Autowired
     private AuthenticationManager authenticationManager;
 
     @PostMapping("/register-admin")
     public ResponseEntity<?> registerAdmin(@RequestBody RegisterRequest request) {
-        var existing = userRepository.findByUsername(request.getUsername());
-        if (existing.isPresent()) {
-            User user = existing.get();
-            user.setRole("ROLE_ADMIN");
-            userRepository.save(user);
-            return ResponseEntity.ok("User promoted to admin");
-        }
-        usersService.registerUser(request);
-        var newUser = userRepository.findByUsername(request.getUsername());
-        if (newUser.isPresent()) {
-            User user = newUser.get();
-            user.setRole("ROLE_ADMIN");
-            userRepository.save(user);
-        }
-        return ResponseEntity.ok("Admin user created");
+        return ResponseEntity.ok(usersService.registerAdmin(request));
     }
 
     @PostMapping("/login")
@@ -91,7 +72,14 @@ public class AuthController {
         String provider = oauth2User.getAttribute("provider") != null ? 
             oauth2User.getAttribute("provider") : "google";
 
-        String token = jwtUtil.createToken(email != null ? email : name);
+        String usernameToUse = email != null ? email : name;
+        String firstName = oauth2User.getAttribute("given_name");
+        String lastName = oauth2User.getAttribute("family_name");
+
+        // Delegar la verificación y creación al servicio
+        usersService.processOAuthPostLogin(usernameToUse, email, name, firstName, lastName);
+
+        String token = jwtUtil.createToken(usernameToUse);
 
         OAuth2Response response = new OAuth2Response(
             token,
