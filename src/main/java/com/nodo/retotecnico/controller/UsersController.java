@@ -20,7 +20,7 @@ import com.nodo.retotecnico.service.UsersService;
 import org.springframework.web.bind.annotation.GetMapping;
 
 @RestController
-@RequestMapping("/nodos/Users")
+@RequestMapping("/nodos/users")
 public class UsersController {
 
     @Autowired

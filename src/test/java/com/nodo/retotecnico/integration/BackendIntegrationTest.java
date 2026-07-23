@@ -159,10 +159,10 @@ class BackendIntegrationTest {
         mockMvc.perform(get("/nodos/cart"))
                 .andExpect(status().is3xxRedirection());
 
-        mockMvc.perform(get("/nodos/Users"))
+        mockMvc.perform(get("/nodos/users"))
                 .andExpect(status().is3xxRedirection());
 
-        mockMvc.perform(get("/nodos/Contents"))
+        mockMvc.perform(get("/nodos/contents"))
                 .andExpect(status().isOk());
     }
 
@@ -211,14 +211,14 @@ class BackendIntegrationTest {
     void jwtAllowsExpansionCrudFlow() throws Exception {
         String token = tokenForUser(unique("expUser"));
 
-        String createResponse = mockMvc.perform(post("/nodos/ExpansionPacks/create")
+        String createResponse = mockMvc.perform(post("/nodos/expansionpacks/create")
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
                           "name": "Pack One",
                           "description": "desc",
-                          "distributor": "EA",
+                          "platforms": "PC",
                           "price": 20.5,
                           "category": "RPG",
                           "publicationDate": "2026-01-01",
@@ -230,12 +230,12 @@ class BackendIntegrationTest {
 
         Integer packId = Integer.valueOf(createResponse);
 
-        mockMvc.perform(get("/nodos/ExpansionPacks/" + packId)
+        mockMvc.perform(get("/nodos/expansionpacks/" + packId)
                 .header("Authorization", bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Pack One"));
 
-        mockMvc.perform(put("/nodos/ExpansionPacks/" + packId)
+        mockMvc.perform(put("/nodos/expansionpacks/" + packId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -247,7 +247,7 @@ class BackendIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Pack One Updated"));
 
-        mockMvc.perform(delete("/nodos/ExpansionPacks/" + packId)
+        mockMvc.perform(delete("/nodos/expansionpacks/" + packId)
                 .header("Authorization", bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").value("Expansion Pack deleted successfully"));
@@ -265,7 +265,7 @@ class BackendIntegrationTest {
         Content saved = contentsRepository.save(content);
         Integer savedId = (Integer) ReflectionTestUtils.getField(saved, "id");
 
-        mockMvc.perform(delete("/nodos/Contents/" + savedId)
+        mockMvc.perform(delete("/nodos/contents/" + savedId)
                 .header("Authorization", bearer(token)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("Internal error")));
@@ -277,7 +277,7 @@ class BackendIntegrationTest {
         User target = persistUser(unique("target"), unique("target") + "@example.com");
         Integer targetId = (Integer) ReflectionTestUtils.getField(target, "id");
 
-        mockMvc.perform(delete("/nodos/Users/" + targetId)
+        mockMvc.perform(delete("/nodos/users/" + targetId)
                 .header("Authorization", bearer(token)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("Internal error")));
@@ -297,7 +297,7 @@ class BackendIntegrationTest {
         ExpansionPack pack = new ExpansionPack();
         ReflectionTestUtils.setField(pack, "name", "Expansion Cart");
         ReflectionTestUtils.setField(pack, "description", "desc");
-        ReflectionTestUtils.setField(pack, "distributor", "EA");
+        ReflectionTestUtils.setField(pack, "platforms", "PC");
         ReflectionTestUtils.setField(pack, "price", 15.75);
         ReflectionTestUtils.setField(pack, "category", "Shooter");
         ReflectionTestUtils.setField(pack, "publicationDate", "2026-02-02");

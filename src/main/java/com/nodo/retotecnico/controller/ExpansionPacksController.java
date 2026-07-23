@@ -17,7 +17,7 @@ import com.nodo.retotecnico.model.ExpansionPack;
 import com.nodo.retotecnico.service.ExpansionPacksService;
 
 @RestController
-@RequestMapping("/nodos/ExpansionPacks")
+@RequestMapping("/nodos/expansionpacks")
 public class ExpansionPacksController {
 
     @Autowired

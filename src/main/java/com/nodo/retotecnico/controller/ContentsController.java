@@ -17,7 +17,7 @@ import com.nodo.retotecnico.model.Content;
 import com.nodo.retotecnico.service.ContentsService;
 
 @RestController
-@RequestMapping("/nodos/Contents")
+@RequestMapping("/nodos/contents")
 public class ContentsController {
 
     @Autowired
