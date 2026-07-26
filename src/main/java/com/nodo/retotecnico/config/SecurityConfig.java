@@ -81,7 +81,7 @@ public class SecurityConfig {
             )
             .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
             .oauth2Login(oauth2 -> oauth2
-                .defaultSuccessUrl("/auth/oauth2/success", true)
+                .defaultSuccessUrl("http://localhost:5173/", true)
             );
         return http.build();
     }
