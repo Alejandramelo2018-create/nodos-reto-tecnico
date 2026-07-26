@@ -61,6 +61,37 @@ public class UsersServiceImpl implements UsersService{
         return UserRepository.save(newUser).getId();
     }
 
+    public String registerAdmin(RegisterRequest request) {
+        var existing = UserRepository.findByUsername(request.getUsername());
+        if (existing.isPresent()) {
+            throw new RuntimeException("El nombre de usuario ya está en uso.");
+        }
+
+        registerUser(request);
+        User createdUser = UserRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("Error creating admin user"));
+        createdUser.setRole("ROLE_ADMIN");
+        UserRepository.save(createdUser);
+
+        return "Admin user created";
+    }
+
+    @Override
+    public void processOAuthPostLogin(String username, String email, String name, String firstName, String lastName) {
+        if (UserRepository.findByUsername(username).isEmpty()) {
+            User newUser = new User();
+            newUser.setUsername(username);
+            newUser.setEmail(email);
+            newUser.setName(name);
+            newUser.setFirstName(firstName);
+            newUser.setLastName(lastName);
+            newUser.setRole("ROLE_USER");
+            newUser.setRegistrationDate(new Date());
+            newUser.setPassword(""); // OAuth2 users might not need a password
+            UserRepository.save(newUser);
+        }
+    }
+
      @Override
     public User updateUser(Integer id, User user){
         User existingUser = UserRepository.findById(id)

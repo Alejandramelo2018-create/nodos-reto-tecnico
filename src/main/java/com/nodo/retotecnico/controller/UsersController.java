@@ -13,11 +13,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.validation.Valid;
-
 import com.nodo.retotecnico.model.User;
 import com.nodo.retotecnico.service.UsersService;
-import org.springframework.web.bind.annotation.GetMapping;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/nodos/users")

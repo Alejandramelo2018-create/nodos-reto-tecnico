@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -116,7 +117,7 @@ public class CartController {
     }
 
     // Remover producto del carrito
-    @PostMapping("/remove")
+    @DeleteMapping("/remove")
     public CartResponseDTO removeFromCart(@RequestParam Integer expansionId) {
         User authenticatedUser = getAuthenticatedUser();
         Cart cart = cartService.removeFromCart(authenticatedUser.getId(), expansionId);
@@ -124,7 +125,7 @@ public class CartController {
     }
 
     // Vaciar carrito
-    @PostMapping("/clear")
+    @DeleteMapping("/clear")
     public void clearCart() {
         User authenticatedUser = getAuthenticatedUser();
         cartService.clearCart(authenticatedUser.getId());
