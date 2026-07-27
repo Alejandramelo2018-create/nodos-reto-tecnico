@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -35,8 +36,11 @@ public class ExpansionPack {
     private Integer id;
     
     private String name;
+
+    @Column(columnDefinition = "TEXT")
     private String description;
-    private String distributor;
+
+    private String platforms;
     private double price;
     private String category;
     private String publicationDate;

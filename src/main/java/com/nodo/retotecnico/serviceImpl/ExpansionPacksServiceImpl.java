@@ -35,7 +35,7 @@ public class ExpansionPacksServiceImpl implements ExpansionPacksService{
                 .orElseThrow(() -> new RuntimeException("ExpansionPack not found"));
         existingExpansionPack.setName(expansionPack.getName());
         existingExpansionPack.setDescription(expansionPack.getDescription());
-        existingExpansionPack.setDistributor(expansionPack.getDistributor());
+        existingExpansionPack.setPlatforms(expansionPack.getPlatforms());
         existingExpansionPack.setPrice(expansionPack.getPrice());
         existingExpansionPack.setCategory(expansionPack.getCategory());
         existingExpansionPack.setPublicationDate(expansionPack.getPublicationDate());

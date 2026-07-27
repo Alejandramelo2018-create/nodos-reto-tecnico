@@ -62,17 +62,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/nodos/subscriptions/create").permitAll()
 
                 // GET públicos - lectura de catálogos
-                .requestMatchers(HttpMethod.GET, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").permitAll()
 
                 // Endpoints protegidos para admins
-                .requestMatchers(HttpMethod.POST, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/nodos/Contents/**", "/nodos/platform/**", "/nodos/ExpansionPacks/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").hasRole("ADMIN")
 
                 // Suscripciones: solo ADMIN puede listar, ver, actualizar o borrar
                 .requestMatchers("/nodos/subscriptions/**").hasRole("ADMIN")
 
-                .requestMatchers("/nodos/Users/**").hasRole("ADMIN") // Por simplicidad, solo admin gestiona usuarios o podrías limitarlo a ellos mismos después
+                .requestMatchers("/nodos/users/**").hasRole("ADMIN") // Por simplicidad, solo admin gestiona usuarios o podrías limitarlo a ellos mismos después
 
                 
                 // Permitir GET público
@@ -91,7 +91,7 @@ public class SecurityConfig {
             )
             .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
             .oauth2Login(oauth2 -> oauth2
-                .defaultSuccessUrl("/auth/oauth2/success", true)
+                .defaultSuccessUrl("http://localhost:5173/", true)
             );
         return http.build();
     }
