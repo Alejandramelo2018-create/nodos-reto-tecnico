@@ -117,6 +117,21 @@ public class UsersServiceImpl implements UsersService{
         user.setRole(role);
         return UserRepository.save(user);
     }
+
+    @Override
+    public User updateBetaTester(Integer id, Boolean betaTester) {
+        User user = UserRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setBetaTester(betaTester);
+        return UserRepository.save(user);
+    }
+
+    @Override
+    public Integer getCompletedChallenges(Integer id) {
+        User user = UserRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return user.getCompletedChallenges() == null ? 0 : user.getCompletedChallenges();
+    }
 }
 
 

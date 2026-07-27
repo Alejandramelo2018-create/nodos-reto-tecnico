@@ -2,6 +2,7 @@ package com.nodo.retotecnico.config;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +21,9 @@ import com.nodo.retotecnico.security.JwtFilter;
 
 @Configuration
 public class SecurityConfig {
+
+    @Value("${frontend.url}")
+    private String frontendUrl;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -55,43 +59,32 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
+                // /auth/me requiere estar autenticado (a diferencia del resto de /auth/**, que es público)
+                .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
+
                 // Endpoints públicos de autenticación
                 .requestMatchers("/auth/**", "/oauth2/**", "/login**", "/error**").permitAll()
 
-                // Formulario público de suscripción (newsletter, beta testing, focus group, simmer challenge)
-                .requestMatchers(HttpMethod.POST, "/nodos/subscriptions/create").permitAll()
-
                 // GET públicos - lectura de catálogos
-                .requestMatchers(HttpMethod.GET, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**", "/nodos/challenges/**").permitAll()
 
                 // Endpoints protegidos para admins
-                .requestMatchers(HttpMethod.POST, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**").hasRole("ADMIN")
-
-                // Suscripciones: solo ADMIN puede listar, ver, actualizar o borrar
-                .requestMatchers("/nodos/subscriptions/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**", "/nodos/challenges/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**", "/nodos/challenges/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/nodos/contents/**", "/nodos/platform/**", "/nodos/expansionpacks/**", "/nodos/challenges/**").hasRole("ADMIN")
 
                 .requestMatchers("/nodos/users/**").hasRole("ADMIN") // Por simplicidad, solo admin gestiona usuarios o podrías limitarlo a ellos mismos después
 
-                
-                // Permitir GET público
-                .requestMatchers(HttpMethod.GET, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").permitAll()
-                
-                // Endpoints protegidos para admins: crear, actualizar, borrar
-                .requestMatchers(HttpMethod.POST, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/nodos/contents/**", "/nodos/contents", "/nodos/platform/**", "/nodos/platform", "/nodos/expansionpacks/**", "/nodos/expansionpacks").hasRole("ADMIN")
-                
-                .requestMatchers("/nodos/users/**").hasRole("ADMIN") // Solo admin gestiona usuarios
-                // Cart y Buys requieren autenticación (USER o ADMIN)
-                .requestMatchers("/nodos/cart/**", "/nodos/buys/**").authenticated()
+                // Cart, Buys y Subscription-Challenge requieren autenticación (USER o ADMIN)
+                // La restricción extra de ADMIN para pasar un reto a FINALIZADO/FALLIDO se resuelve en SubscriptionChallengeController,
+                // porque depende del contenido del body, no solo de la URL/método HTTP.
+                .requestMatchers("/nodos/cart/**", "/nodos/buys/**", "/nodos/subscriptionchallenges/**").authenticated()
                 // Resto de operaciones requieren autenticación
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
             .oauth2Login(oauth2 -> oauth2
-                .defaultSuccessUrl("http://localhost:5173/", true)
+                .defaultSuccessUrl(frontendUrl, true)
             );
         return http.build();
     }

@@ -55,4 +55,14 @@ public class UsersController {
         return ResponseEntity.ok(usersService.updateUserRole(id, role));
     }
 
+    @PutMapping("/{id}/betatester")
+    public ResponseEntity<User> updateBetaTester(@PathVariable Integer id, @RequestBody Boolean betaTester){
+        return ResponseEntity.ok(usersService.updateBetaTester(id, betaTester));
+    }
+
+    @GetMapping("/{id}/completedchallenges")
+    public Integer getCompletedChallenges(@PathVariable Integer id){
+        return usersService.getCompletedChallenges(id);
+    }
+
 }
