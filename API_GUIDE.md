@@ -8,7 +8,7 @@ Referencia completa de endpoints para integrar el frontend (`http://localhost:51
 - **Content-Type** por defecto: `application/json` (se indica cuando un endpoint espera otra cosa)
 - **Autenticación**: JWT en header `Authorization: Bearer <token>`. El token expira a las **24 horas**. El logout invalida el token en una lista negra **en memoria** del servidor (si el backend se reinicia, todos los tokens "deslogueados" vuelven a ser válidos hasta su expiración natural).
 - **CORS**: habilitado para `http://localhost:5173` (métodos `GET, POST, PUT, DELETE, OPTIONS`, cualquier header, credenciales permitidas).
-- Todas las rutas de recursos están ahora **en minúsculas**: `/nodos/contents`, `/nodos/expansionpacks`, `/nodos/users`, `/nodos/platform`, `/nodos/cart`, `/nodos/buys`, `/nodos/subscriptions`. Las rutas viejas en mixed-case (`/nodos/Contents`, `/nodos/ExpansionPacks`, `/nodos/Users`) ya **no existen**.
+- Todas las rutas de recursos están ahora **en minúsculas**: `/nodos/contents`, `/nodos/expansionpacks`, `/nodos/users`, `/nodos/platform`, `/nodos/cart`, `/nodos/buys`, `/nodos/challenges`, `/nodos/subscriptionchallenges`. Las rutas viejas en mixed-case (`/nodos/Contents`, `/nodos/ExpansionPacks`, `/nodos/Users`) ya **no existen**. La feature `/nodos/subscriptions` (newsletter/beta testing) fue eliminada por completo.
 
 ### Formato de errores
 
@@ -17,17 +17,20 @@ Referencia completa de endpoints para integrar el frontend (`http://localhost:51
 | 400 | Falla de validación (`@Valid` en el body, ej. registro) | `{"campo": "mensaje", ...}` — un mapa por cada campo inválido |
 | 401 | Sin token / token inválido / token invalidado por logout | `{"error": "Token invalidated"}` (para token invalidado) o body vacío según el caso |
 | 401 | Login con credenciales incorrectas | `"Credenciales inválidas"` (string plano) |
-| 403 | Token válido pero rol insuficiente | `{"timestamp":"...","status":403,"error":"Forbidden","path":"/..."}` (formato default de Spring) |
+| 401 | Acción bloqueada por una validación de negocio dentro de un controller (ej. no ser dueño de una compra, o no ser ADMIN para finalizar un reto) | el mensaje de la excepción, en texto plano (ver nota abajo) |
+| 403 | Token válido pero rol insuficiente **según `SecurityConfig`** (ej. `POST /nodos/expansionpacks/create` sin rol ADMIN) | `{"timestamp":"...","status":403,"error":"Forbidden","path":"/..."}` (formato default de Spring) |
 | 302 | Acceso **sin token** a un endpoint protegido | Redirect a una página de login HTML generada por Spring, **no JSON**. Ver nota abajo. |
 | 500 | Cualquier excepción no controlada (`GlobalExceptionHandler`) | `"Internal error: <mensaje de la excepción>"` (string plano) |
 
 > ⚠️ **Importante para el frontend**: si el usuario no está logueado y llama a un endpoint protegido, la respuesta es un **302 redirect** a una página HTML, no un 401 JSON limpio. Un `fetch` normal sigue el redirect automáticamente y termina con contenido HTML en vez de JSON — hay que manejar esto explícitamente (revisar `response.redirected` o el status antes de intentar `response.json()`), o el intento de parseo va a fallar de forma confusa. Esto pasa porque el login OAuth2 está activo sin un `AuthenticationEntryPoint` propio configurado para clientes JSON/SPA.
 >
 > ⚠️ Cualquier ruta que no exista (incluidas las viejas en mixed-case) devuelve **500** "Internal error: No static resource ..." en vez de un 404 limpio, porque `GlobalExceptionHandler` captura también la excepción interna de "recurso no encontrado" de Spring.
+>
+> ⚠️ **Hay dos mecanismos distintos de "acceso denegado" en la API, con status code distinto cada uno.** Si `SecurityConfig` bloquea la ruta/método por rol (ej. un usuario sin `ROLE_ADMIN` llamando `POST /nodos/expansionpacks/create`), la respuesta es **403** con el formato default de Spring. Pero si el bloqueo ocurre **dentro** de un controller (una validación de negocio, ej. "no sos dueño de esta compra" en `BuysController`, o "solo ADMIN puede finalizar un reto" en `SubscriptionChallengeController`), `GlobalExceptionHandler` tiene un handler específico para `AccessDeniedException` que responde **401** (no 403) con el mensaje en texto plano. No asumas que "sin permiso" siempre es 403 — depende de en qué capa se detectó.
 
 ---
 
-## Auth (`/auth`) — público
+## Auth (`/auth`) — público, excepto `GET /me`
 
 | Método | Ruta | Body | Respuesta 200 |
 |---|---|---|---|
@@ -35,9 +38,33 @@ Referencia completa de endpoints para integrar el frontend (`http://localhost:51
 | POST | `/auth/login` | `{"username","password"}` | `{"token":"<jwt>"}` |
 | POST | `/auth/register-admin` | igual que register | `"Admin user created"` o `"User promoted to admin"` (string plano) |
 | POST | `/auth/logout` | — (header `Authorization`) | `"Logout exitoso"` |
+| GET | `/auth/me` | — (requiere `Authorization: Bearer <token>`) | `200` + usuario autenticado (ver abajo) |
 | GET | `/auth/oauth2/success` | — (requiere sesión OAuth2 activa) | `{"token","message","provider","email","name"}` |
 | GET | `/oauth2/authorization/google` | — | 302 redirect a Google |
 | GET | `/oauth2/authorization/meta` | — | 302 redirect a Facebook |
+
+Tras un login OAuth2 exitoso, Spring redirige directo al **frontend** (no a `/auth/oauth2/success`), a la URL configurada en la variable de entorno `FRONTEND_URL` (`application.yml` → `frontend.url: ${FRONTEND_URL:http://localhost:5173/}`). Si el frontend corre en otro puerto/dominio, hay que actualizar `FRONTEND_URL` en `.env`.
+
+### `GET /auth/me`
+
+Único endpoint de `/auth/**` que requiere estar autenticado — pensado para que el frontend obtenga el `id` numérico del usuario logueado (necesario, por ejemplo, para armar `{"user":{"id":...}}` al llamar `POST /nodos/subscriptionchallenges/create`, ya que `/nodos/users/**` es ADMIN-only y no sirve para que un usuario normal se autoconsulte).
+
+**Respuesta real** (`CurrentUserDTO`, sin `password` ni los campos internos de `UserDetails`):
+```json
+{
+  "id": 3,
+  "username": "meUser1",
+  "firstName": "Me",
+  "lastName": "User",
+  "email": "meuser1@example.com",
+  "country": "Colombia",
+  "role": "ROLE_USER",
+  "betaTester": false,
+  "completedChallenges": 0
+}
+```
+
+> ⚠️ **Sin token o token malformado → 302** (no 401), exactamente igual que cualquier otro endpoint protegido de la app — ver la nota de "sin token en un endpoint protegido" al inicio de esta guía. La única forma de obtener un **401** JSON limpio en esta ruta es con un token que **sí es válido pero fue invalidado por logout** (`{"error": "Token invalidated"}`), igual que en el resto de la API. Verificado en vivo: token ausente → 302 a `/login`; token con formato inválido → 302 a `/login`; token deslogueado → 401. No se agregó un `AuthenticationEntryPoint` especial solo para esta ruta porque hubiera sido una inconsistencia respecto al resto de la API — si se necesita un verdadero 401 para "sin token" en toda la app, es un cambio más amplio a `SecurityConfig`, no algo específico de `/auth/me`.
 
 **Validaciones de `/auth/register`** (400 si fallan, un mensaje por campo):
 - `username`: 3-30 caracteres, solo letras/números/`_`
@@ -132,19 +159,68 @@ Público: `GET`. Requiere rol `ADMIN`: `POST`, `PUT`, `DELETE`.
 
 ---
 
-## Subscriptions (`/nodos/subscriptions`)
+## Challenges (`/nodos/challenges`)
 
-Público: solo `POST /create`. Todo lo demás requiere rol `ADMIN`.
+Público: `GET`. Requiere rol `ADMIN`: `POST`, `PUT`, `DELETE` (mismo patrón que Contents/Platform/ExpansionPacks).
 
 | Método | Ruta | Body | Respuesta |
 |---|---|---|---|
-| POST | `/nodos/subscriptions/create` | `{"email","name","subscriptionType","country","consentMarketing"}` | `200` + `id` numérico |
-| GET | `/nodos/subscriptions` | — (ADMIN) | `200` + lista |
-| GET | `/nodos/subscriptions/{id}` | — (ADMIN) | `200` + objeto |
-| PUT | `/nodos/subscriptions/{id}` | mismos campos | `200` + objeto actualizado |
-| DELETE | `/nodos/subscriptions/{id}` | — (ADMIN) | `200` + `"Subscription deleted successfully"` |
+| GET | `/nodos/challenges` | — | `200` + lista de retos |
+| GET | `/nodos/challenges/{id}` | — | `200` + reto |
+| POST | `/nodos/challenges/create` | ver campos abajo | `200` + `id` numérico |
+| PUT | `/nodos/challenges/{id}` | ver campos abajo | `200` + reto actualizado (todos los campos se actualizan) |
+| DELETE | `/nodos/challenges/{id}` | — | `200` + `"Challenge deleted successfully"` |
 
-`subscriptionType` es un enum: `BETA_TESTING`, `FOCUS_GROUP`, `SIMMER_CHALLENGE`. El campo `status` lo asigna el servidor (`PENDING` por defecto, no se envía en el request).
+**Campos del body** (create/update):
+```json
+{
+  "name": "Reto Jardin Zen",
+  "start": "2026-08-01",
+  "end": "2026-08-31",
+  "description": "Construye el jardín más relajante",
+  "imageURL": "http://example.com/reto1.png"
+}
+```
+
+**Respuesta real**:
+```json
+{
+  "id": 1,
+  "name": "Reto Jardin Zen",
+  "start": "2026-08-01",
+  "end": "2026-08-31",
+  "description": "Construye el jardín más relajante",
+  "imageURL": "http://example.com/reto1.png",
+  "deleted": false
+}
+```
+
+`start`/`end` son fechas puras (`LocalDate`, formato `YYYY-MM-DD`, sin hora ni zona horaria) — se probó explícitamente en vivo con `java.util.Date` + `@Temporal(DATE)` primero y las fechas volvían corridas un día hacia atrás (por conversión de zona horaria al persistir); se cambió a `LocalDate` para evitarlo por completo. `imageURL` (con "URL" en mayúsculas al final) sí se serializa tal cual como `imageURL` — a diferencia de `URLImage` en ExpansionPacks, acá no hace falta ningún `@JsonProperty` especial porque el problema de Jackson solo aparece cuando el nombre **empieza** con dos o más mayúsculas seguidas.
+
+---
+
+## Subscription-Challenge (`/nodos/subscriptionchallenges`)
+
+Relaciona un `User` con un `Challenge` (tabla `subscription_challenge`). Requiere estar **autenticado** (cualquier usuario, no solo ADMIN) para todo el CRUD — pero con una restricción adicional por el **valor de `status`** que se está seteando (ver abajo).
+
+| Método | Ruta | Body | Respuesta |
+|---|---|---|---|
+| GET | `/nodos/subscriptionchallenges` | — | `200` + lista completa |
+| GET | `/nodos/subscriptionchallenges/{id}` | — | `200` + objeto |
+| POST | `/nodos/subscriptionchallenges/create` | `{"user":{"id":<userId>},"challenge":{"id":<challengeId>}}` | `200` + `id` numérico. `status` queda en `INICIADO` por defecto, no se envía. |
+| PUT | `/nodos/subscriptionchallenges/{id}` | `{"status":"<ESTADO>"}` (ver nota — `user`/`challenge` no se pueden reasignar por esta vía) | `200` + objeto actualizado |
+| DELETE | `/nodos/subscriptionchallenges/{id}` | — | `200` + `"SubscriptionChallenge deleted successfully"` |
+| GET | `/nodos/subscriptionchallenges/user/{userId}` | — | `200` + lista de inscripciones de ese usuario |
+
+`status` es un enum: `INICIADO`, `EN_PROGRESO`, `FINALIZADO`, `FALLIDO`, `CANCELADO`.
+
+> ⚠️ **Regla de autorización por transición de estado**: cualquier usuario autenticado puede crear la inscripción y moverla a `EN_PROGRESO` o `CANCELADO`. Para moverla a `FINALIZADO` o `FALLIDO`, el que llama al `PUT` tiene que tener `ROLE_ADMIN` — si no, la respuesta es **401** `"Solo un administrador puede marcar un reto como finalizado o fallido."` (ver la nota de "dos mecanismos de acceso denegado" al inicio de esta guía — este es el caso de `AccessDeniedException` lanzada dentro del controller, no el 403 de `SecurityConfig`). Verificado en vivo con un usuario no-ADMIN.
+>
+> Cuando el `status` pasa a `FINALIZADO` (y no lo estaba ya — un segundo `PUT` a `FINALIZADO` no vuelve a sumar), el backend incrementa automáticamente `completedChallenges` del `User` asociado. Confirmado en vivo: `GET /nodos/users/{id}/completedchallenges` sube en 1 exactamente una vez.
+>
+> `PUT` solo modifica `status` — el `user`/`challenge` originales de la inscripción no se pueden cambiar por este endpoint (si se envían, se ignoran).
+>
+> La respuesta incluye el `User` completo relacionado, pero **no incluye `password`** (ver sección Users más abajo — el campo se ocultó globalmente).
 
 ---
 
@@ -177,7 +253,7 @@ Público: solo `POST /create`. Todo lo demás requiere rol `ADMIN`.
 | Método | Ruta | Body | Respuesta |
 |---|---|---|---|
 | GET | `/nodos/buys` | — | `200` + lista de `BuyResponseDTO` del usuario logueado |
-| GET | `/nodos/buys/{id}` | — | `200` + `BuyResponseDTO` (403 si la compra no es del usuario) |
+| GET | `/nodos/buys/{id}` | — | `200` + `BuyResponseDTO` (**401**, no 403, si la compra no es del usuario — ver nota de "dos mecanismos de acceso denegado" al inicio de la guía) |
 | POST | `/nodos/buys/purchase` | body **texto plano** (ej. `CARD`), header `Content-Type: text/plain` | `200` + `BuyResponseDTO`, vacía el carrito activo y crea uno nuevo |
 | POST | `/nodos/buys/direct` | `{"expansionId","platformId","paymentMethod"}` (JSON) | `200` + `BuyResponseDTO` |
 | PUT | `/nodos/buys/{id}` | entidad `Buy` completa, **incluyendo `"cart":{"id": <id_real_del_cart>}`** | `200` + entidad `Buy` (ver advertencia) |
@@ -207,16 +283,20 @@ Público: solo `POST /create`. Todo lo demás requiere rol `ADMIN`.
 
 | Método | Ruta | Body | Respuesta |
 |---|---|---|---|
-| GET | `/nodos/users` | — | `200` + lista de usuarios **(ver advertencia)** |
+| GET | `/nodos/users` | — | `200` + lista de usuarios (ya sin `password`, ver nota) |
 | GET | `/nodos/users/{id}` | — | `200` + usuario |
 | POST | `/nodos/users/create` | entidad `User` | `200` + `id` numérico |
 | PUT | `/nodos/users/{id}` | `{"name","email"}` | `200` + usuario actualizado (ver nota) |
 | DELETE | `/nodos/users/{id}` | — | `200` + `"User deleted successfully"` |
 | PUT | `/nodos/users/{id}/role` | `"ROLE_ADMIN"` (string JSON plano) | `200` + usuario con rol actualizado |
+| PUT | `/nodos/users/{id}/betatester` | `true`/`false` (boolean JSON plano) | `200` + usuario con `betaTester` actualizado |
+| GET | `/nodos/users/{id}/completedchallenges` | — | `200` + entero (cantidad de retos con `status: FINALIZADO`) |
 
-> 🔴 **`GET /nodos/users` (y `GET /nodos/users/{id}`) devuelven el hash bcrypt de la contraseña de cada usuario** en el campo `"password"`, además de los campos internos de `UserDetails` (`enabled`, `authorities`, `accountNonExpired`, etc.) sin ningún filtro. El frontend nunca debería mostrar ni loguear ese campo. Confirmado en vivo.
+**Campos nuevos en la entidad `User`**: `betaTester` (boolean, default `false`) y `completedChallenges` (entero, default `0`, se incrementa automáticamente desde `subscription_challenge` — ver esa sección).
+
+> ✅ **Corregido en esta sesión**: `GET /nodos/users` (y `GET /nodos/users/{id}`) ya **no** devuelven el campo `"password"` — se agregó `@JsonIgnore` sobre el getter en `User.java`. Sigue devolviendo el resto de campos internos de `UserDetails` (`enabled`, `authorities`, `accountNonExpired`, etc.) sin filtrar, que no son sensibles pero son ruido para el frontend.
 >
-> ⚠️ **`PUT /nodos/users/{id}` solo actualiza `name` y `email`.** `firstName`, `lastName`, `country`, `username`, `role` se ignoran silenciosamente aunque los mandes en el body (bug confirmado en vivo — a diferencia de lo que decía documentación previa del proyecto, `DELETE` sí funciona correctamente en la versión actual).
+> ⚠️ **`PUT /nodos/users/{id}` solo actualiza `name` y `email`.** `firstName`, `lastName`, `country`, `username`, `role`, `betaTester`, `completedChallenges` se ignoran silenciosamente aunque los mandes en el body — usar los endpoints dedicados (`/role`, `/betatester`) para esos campos. `DELETE` funciona correctamente.
 
 ---
 
@@ -224,14 +304,15 @@ Público: solo `POST /create`. Todo lo demás requiere rol `ADMIN`.
 
 | Recurso | Público | Requiere login | Requiere rol ADMIN |
 |---|---|---|---|
-| `/auth/**`, `/oauth2/**` | Todo | — | — |
+| `/auth/**`, `/oauth2/**` | Todo excepto `GET /auth/me` | `GET /auth/me` | — |
 | `/nodos/contents` | GET | — | POST/PUT/DELETE |
 | `/nodos/platform` | GET | — | POST/PUT/DELETE |
 | `/nodos/expansionpacks` | GET | — | POST/PUT/DELETE |
-| `/nodos/subscriptions` | solo POST `/create` | — | resto (GET/PUT/DELETE) |
+| `/nodos/challenges` | GET | — | POST/PUT/DELETE |
 | `/nodos/users` | — | — | todo |
 | `/nodos/cart` | — | todo | — |
 | `/nodos/buys` | — | todo | — |
+| `/nodos/subscriptionchallenges` | — | todo (con excepción, ver nota) | mover `status` a `FINALIZADO`/`FALLIDO` |
 
 ---
 
@@ -241,9 +322,12 @@ Público: solo `POST /create`. Todo lo demás requiere rol `ADMIN`.
 2. Ruta inexistente → **500** "Internal error: No static resource ...", no 404.
 3. `DELETE /nodos/contents/{id}` → siempre 500, lógica de existencia invertida.
 4. `PUT /nodos/contents/{id}` y `PUT /nodos/users/{id}` → actualización parcial silenciosa (ignoran la mayoría de los campos del body).
-5. `GET /nodos/users` → expone `password` (hash) y campos internos de `UserDetails`.
+5. ~~`GET /nodos/users` → expone `password` (hash)~~ — **corregido** (`@JsonIgnore` en `User.getPassword()`).
 6. ~~`PUT /nodos/platform/{id}` → recursión infinita + fuga masiva de hash de contraseña~~ — **corregido** (se agregó `@JsonIgnore` en `Platform.cartDetails` y `Cart.details`).
 7. `PUT /nodos/buys/{id}` → requiere `cart.id` explícito o falla con 500 (la recursión ya está corregida, este punto sigue pendiente).
 8. Login (`/auth/login`) usa `username`, no `email` — ajustar el frontend en consecuencia.
 9. `/nodos/cart/add` y `/nodos/cart/remove` reciben los IDs por **query string**, no por JSON body.
 10. Logout invalida el token en memoria; se resetea si el backend reinicia.
+11. `AccessDeniedException` lanzada dentro de un controller (dueño de compra, transición de estado de reto) responde **401**, no 403 — distinto del 403 que da `SecurityConfig` por rol insuficiente en la URL. Ver nota al inicio de la guía.
+12. La feature `/nodos/subscriptions` (newsletter/beta testing) fue **eliminada por completo** de esta versión del backend.
+13. `spring.jpa.hibernate.ddl-auto` ahora es `update` (no `create-drop`): los datos **persisten entre reinicios** del backend. El seeder de `ExpansionPack` sigue siendo seguro (solo siembra si la tabla está vacía).
