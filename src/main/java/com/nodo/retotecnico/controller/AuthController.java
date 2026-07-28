@@ -2,22 +2,30 @@ package com.nodo.retotecnico.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nodo.retotecnico.dto.AuthResponse;
+import com.nodo.retotecnico.dto.ChangePasswordRequest;
+import com.nodo.retotecnico.dto.CurrentUserDTO;
 import com.nodo.retotecnico.dto.LoginRequest;
 import com.nodo.retotecnico.dto.OAuth2Response;
 import com.nodo.retotecnico.dto.RegisterRequest;
+import com.nodo.retotecnico.dto.UpdateProfileRequest;
+import com.nodo.retotecnico.model.User;
+import com.nodo.retotecnico.repository.UserRepository;
 import com.nodo.retotecnico.security.JwtUtil;
 import com.nodo.retotecnico.service.UsersService;
 
@@ -34,7 +42,68 @@ public class AuthController {
     private UsersService usersService;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private AuthenticationManager authenticationManager;
+
+    // Mismo patrón que BuysController.getAuthenticatedUsername(): soporta tanto
+    // el JwtFilter (principal = UserDetails) como OAuth2Login (principal = OAuth2User).
+    private String getAuthenticatedUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new AccessDeniedException("Usuario no autenticado");
+        }
+
+        Object principal = auth.getPrincipal();
+        if (principal instanceof OAuth2User) {
+            OAuth2User oauth2User = (OAuth2User) principal;
+            String email = oauth2User.getAttribute("email");
+            return email != null ? email : oauth2User.getAttribute("name");
+        } else if (principal instanceof UserDetails) {
+            return ((UserDetails) principal).getUsername();
+        } else {
+            return principal.toString();
+        }
+    }
+
+    private User getAuthenticatedUserEntity() {
+        String username = getAuthenticatedUsername();
+        User currentUser = userRepository.findByEmail(username);
+        if (currentUser == null) {
+            currentUser = userRepository.findByUsernameIgnoreCase(username);
+        }
+        if (currentUser == null) {
+            throw new AccessDeniedException("Usuario no encontrado");
+        }
+        return currentUser;
+    }
+
+    @GetMapping("/me")
+    public CurrentUserDTO getCurrentUser() {
+        return CurrentUserDTO.fromUser(getAuthenticatedUserEntity());
+    }
+
+    @PutMapping("/me/betatester")
+    public CurrentUserDTO updateOwnBetaTester(@RequestBody Boolean betaTester) {
+        User currentUser = getAuthenticatedUserEntity();
+        User updated = usersService.updateBetaTester(currentUser.getId(), betaTester);
+        return CurrentUserDTO.fromUser(updated);
+    }
+
+    @PutMapping("/me")
+    public CurrentUserDTO updateOwnProfile(@Valid @RequestBody UpdateProfileRequest request) {
+        User currentUser = getAuthenticatedUserEntity();
+        User updated = usersService.updateOwnProfile(currentUser.getId(), request);
+        return CurrentUserDTO.fromUser(updated);
+    }
+
+    @PutMapping("/me/password")
+    public CurrentUserDTO updateOwnPassword(@Valid @RequestBody ChangePasswordRequest request) {
+        User currentUser = getAuthenticatedUserEntity();
+        User updated = usersService.changePassword(currentUser.getId(), request.getCurrentPassword(), request.getNewPassword());
+        return CurrentUserDTO.fromUser(updated);
+    }
 
     @PostMapping("/register-admin")
     public ResponseEntity<?> registerAdmin(@RequestBody RegisterRequest request) {

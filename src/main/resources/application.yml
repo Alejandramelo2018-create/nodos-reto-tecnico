@@ -44,3 +44,6 @@ server:
 
 jwt:
   secret: ${JWT_SECRET:default_secret_key_please_change}
+
+frontend:
+  url: ${FRONTEND_URL:http://localhost:5173/}

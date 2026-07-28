@@ -47,6 +47,8 @@ public class User implements UserDetails {
     private String username;
     private String password;
     private Boolean deleted = false;
+    private Boolean betaTester = false;
+    private Integer completedChallenges = 0;
 
     @JsonIgnore
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
@@ -84,7 +86,8 @@ public class User implements UserDetails {
     }
 
     @Override
-    public String getPassword() { 
-        return password; 
+    @JsonIgnore
+    public String getPassword() {
+        return password;
     }
 }
