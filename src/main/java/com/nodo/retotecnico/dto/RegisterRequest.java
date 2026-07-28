@@ -37,6 +37,12 @@ public class RegisterRequest {
     @Email(message = "El formato del email es inválido", regexp = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
     private String email;
 
+    // Opcional: si no se envía, el usuario queda con betaTester=false (default de User).
+    private Boolean betaTester;
+
+    public Boolean getBetaTester() { return betaTester; }
+    public void setBetaTester(Boolean betaTester) { this.betaTester = betaTester; }
+
     public String getFirstName() { return firstName; }
     public void setFirstName(String firstName) { this.firstName = firstName; }
     public String getLastName() { return lastName; }

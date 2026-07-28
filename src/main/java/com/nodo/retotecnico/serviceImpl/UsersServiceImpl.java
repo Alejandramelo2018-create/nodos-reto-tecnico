@@ -57,6 +57,7 @@ public class UsersServiceImpl implements UsersService{
         newUser.setRole("ROLE_USER");
         newUser.setRegistrationDate(new Date());
         newUser.setEmail(request.getEmail() != null ? request.getEmail() : request.getUsername() + "@example.com");
+        newUser.setBetaTester(request.getBetaTester() != null ? request.getBetaTester() : false);
 
         return UserRepository.save(newUser).getId();
     }
