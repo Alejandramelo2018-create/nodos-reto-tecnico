@@ -59,8 +59,9 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                // /auth/me requiere estar autenticado (a diferencia del resto de /auth/**, que es público)
+                // /auth/me y /auth/me/betatester requieren estar autenticado (a diferencia del resto de /auth/**, que es público)
                 .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
+                .requestMatchers(HttpMethod.PUT, "/auth/me/betatester").authenticated()
 
                 // Endpoints públicos de autenticación
                 .requestMatchers("/auth/**", "/oauth2/**", "/login**", "/error**").permitAll()

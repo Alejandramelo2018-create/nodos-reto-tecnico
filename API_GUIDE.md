@@ -30,15 +30,16 @@ Referencia completa de endpoints para integrar el frontend (`http://localhost:51
 
 ---
 
-## Auth (`/auth`) — público, excepto `GET /me`
+## Auth (`/auth`) — público, excepto `GET /me` y `PUT /me/betatester`
 
 | Método | Ruta | Body | Respuesta 200 |
 |---|---|---|---|
-| POST | `/auth/register` | `{"username","password","firstName","lastName","country","email"}` | `{"token":"<jwt>"}` |
+| POST | `/auth/register` | `{"username","password","firstName","lastName","country","email","betaTester"}` (`betaTester` opcional, ver nota) | `{"token":"<jwt>"}` |
 | POST | `/auth/login` | `{"username","password"}` | `{"token":"<jwt>"}` |
 | POST | `/auth/register-admin` | igual que register | `"Admin user created"` o `"User promoted to admin"` (string plano) |
 | POST | `/auth/logout` | — (header `Authorization`) | `"Logout exitoso"` |
 | GET | `/auth/me` | — (requiere `Authorization: Bearer <token>`) | `200` + usuario autenticado (ver abajo) |
+| PUT | `/auth/me/betatester` | `true`/`false` (boolean JSON plano, requiere `Authorization: Bearer <token>`) | `200` + usuario autenticado actualizado (ver abajo) |
 | GET | `/auth/oauth2/success` | — (requiere sesión OAuth2 activa) | `{"token","message","provider","email","name"}` |
 | GET | `/oauth2/authorization/google` | — | 302 redirect a Google |
 | GET | `/oauth2/authorization/meta` | — | 302 redirect a Facebook |
@@ -47,7 +48,7 @@ Tras un login OAuth2 exitoso, Spring redirige directo al **frontend** (no a `/au
 
 ### `GET /auth/me`
 
-Único endpoint de `/auth/**` que requiere estar autenticado — pensado para que el frontend obtenga el `id` numérico del usuario logueado (necesario, por ejemplo, para armar `{"user":{"id":...}}` al llamar `POST /nodos/subscriptionchallenges/create`, ya que `/nodos/users/**` es ADMIN-only y no sirve para que un usuario normal se autoconsulte).
+Uno de los dos endpoints de `/auth/**` que requieren estar autenticado (el otro es `PUT /auth/me/betatester`, ver más abajo) — pensado para que el frontend obtenga el `id` numérico del usuario logueado (necesario, por ejemplo, para armar `{"user":{"id":...}}` al llamar `POST /nodos/subscriptionchallenges/create`, ya que `/nodos/users/**` es ADMIN-only y no sirve para que un usuario normal se autoconsulte).
 
 **Respuesta real** (`CurrentUserDTO`, sin `password` ni los campos internos de `UserDetails`):
 ```json
@@ -66,12 +67,36 @@ Tras un login OAuth2 exitoso, Spring redirige directo al **frontend** (no a `/au
 
 > ⚠️ **Sin token o token malformado → 302** (no 401), exactamente igual que cualquier otro endpoint protegido de la app — ver la nota de "sin token en un endpoint protegido" al inicio de esta guía. La única forma de obtener un **401** JSON limpio en esta ruta es con un token que **sí es válido pero fue invalidado por logout** (`{"error": "Token invalidated"}`), igual que en el resto de la API. Verificado en vivo: token ausente → 302 a `/login`; token con formato inválido → 302 a `/login`; token deslogueado → 401. No se agregó un `AuthenticationEntryPoint` especial solo para esta ruta porque hubiera sido una inconsistencia respecto al resto de la API — si se necesita un verdadero 401 para "sin token" en toda la app, es un cambio más amplio a `SecurityConfig`, no algo específico de `/auth/me`.
 
+### `PUT /auth/me/betatester`
+
+Igual que `GET /auth/me`, identifica al usuario por el JWT (no recibe `id` por path). Permite que **cualquier usuario autenticado** active o cancele su propia inscripción a beta testing, sin necesitar rol ADMIN — pensado para que más adelante el usuario pueda cancelarla por su cuenta. Body: booleano JSON plano (`true`/`false`), igual formato que ya usa `PUT /nodos/users/{id}/betatester`.
+
+**Respuesta real** (`CurrentUserDTO`, mismo shape que `GET /auth/me`):
+```json
+{
+  "id": 8,
+  "username": "betauser2",
+  "firstName": "NoBeta",
+  "lastName": "User",
+  "email": "betauser2@example.com",
+  "country": "Colombia",
+  "role": "ROLE_USER",
+  "betaTester": true,
+  "completedChallenges": 0
+}
+```
+
+> Este endpoint es distinto de `PUT /nodos/users/{id}/betatester` (que sigue existiendo, sin cambios, y sigue siendo **ADMIN-only** — pensado para que un admin fuerce el valor en cualquier usuario por su `id`). `PUT /auth/me/betatester` es el equivalente de autoservicio: solo puede cambiar el `betaTester` del usuario dueño del token, nunca el de otro. Verificado en vivo que ambos coexisten sin pisarse: un usuario normal recibe `403` al intentar `PUT /nodos/users/{id}/betatester` (regla de `SecurityConfig` por rol), pero `200` en `PUT /auth/me/betatester`.
+>
+> Mismo comportamiento de 302/401 que `GET /auth/me` para token ausente/inválido/invalidado (ver nota arriba).
+
 **Validaciones de `/auth/register`** (400 si fallan, un mensaje por campo):
 - `username`: 3-30 caracteres, solo letras/números/`_`
 - `password`: 8-50 caracteres, requiere mayúscula + minúscula + número + carácter especial
 - `firstName`/`lastName`: **solo letras y espacios** (un número aquí, ej. `"Buyer3"`, dispara 400)
 - `country`: 2-56 caracteres
 - `email`: formato válido
+- `betaTester`: **opcional**, sin validación — si no se envía (o se envía `null`), el usuario queda con `betaTester: false` (default de `User`). Se guarda directo, sin pasar por ningún endpoint aparte.
 
 > ⚠️ **Login requiere `username`, no `email`.** El body de `/auth/login` es `{"username","password"}` — no existe login por email en el backend (`CustomUserDetailsService` busca únicamente por username). Si el formulario de frontend pide "correo", hay que mapearlo al campo `username` al enviarlo, o el login siempre devuelve 401.
 
@@ -289,7 +314,7 @@ Relaciona un `User` con un `Challenge` (tabla `subscription_challenge`). Requier
 | PUT | `/nodos/users/{id}` | `{"name","email"}` | `200` + usuario actualizado (ver nota) |
 | DELETE | `/nodos/users/{id}` | — | `200` + `"User deleted successfully"` |
 | PUT | `/nodos/users/{id}/role` | `"ROLE_ADMIN"` (string JSON plano) | `200` + usuario con rol actualizado |
-| PUT | `/nodos/users/{id}/betatester` | `true`/`false` (boolean JSON plano) | `200` + usuario con `betaTester` actualizado |
+| PUT | `/nodos/users/{id}/betatester` | `true`/`false` (boolean JSON plano) | `200` + usuario con `betaTester` actualizado (ADMIN-only — para que el propio usuario cambie el suyo, ver `PUT /auth/me/betatester` en la sección Auth) |
 | GET | `/nodos/users/{id}/completedchallenges` | — | `200` + entero (cantidad de retos con `status: FINALIZADO`) |
 
 **Campos nuevos en la entidad `User`**: `betaTester` (boolean, default `false`) y `completedChallenges` (entero, default `0`, se incrementa automáticamente desde `subscription_challenge` — ver esa sección).
@@ -304,7 +329,7 @@ Relaciona un `User` con un `Challenge` (tabla `subscription_challenge`). Requier
 
 | Recurso | Público | Requiere login | Requiere rol ADMIN |
 |---|---|---|---|
-| `/auth/**`, `/oauth2/**` | Todo excepto `GET /auth/me` | `GET /auth/me` | — |
+| `/auth/**`, `/oauth2/**` | Todo excepto `GET /auth/me` y `PUT /auth/me/betatester` | `GET /auth/me`, `PUT /auth/me/betatester` | — |
 | `/nodos/contents` | GET | — | POST/PUT/DELETE |
 | `/nodos/platform` | GET | — | POST/PUT/DELETE |
 | `/nodos/expansionpacks` | GET | — | POST/PUT/DELETE |
