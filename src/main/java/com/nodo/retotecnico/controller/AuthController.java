@@ -18,10 +18,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nodo.retotecnico.dto.AuthResponse;
+import com.nodo.retotecnico.dto.ChangePasswordRequest;
 import com.nodo.retotecnico.dto.CurrentUserDTO;
 import com.nodo.retotecnico.dto.LoginRequest;
 import com.nodo.retotecnico.dto.OAuth2Response;
 import com.nodo.retotecnico.dto.RegisterRequest;
+import com.nodo.retotecnico.dto.UpdateProfileRequest;
 import com.nodo.retotecnico.model.User;
 import com.nodo.retotecnico.repository.UserRepository;
 import com.nodo.retotecnico.security.JwtUtil;
@@ -86,6 +88,20 @@ public class AuthController {
     public CurrentUserDTO updateOwnBetaTester(@RequestBody Boolean betaTester) {
         User currentUser = getAuthenticatedUserEntity();
         User updated = usersService.updateBetaTester(currentUser.getId(), betaTester);
+        return CurrentUserDTO.fromUser(updated);
+    }
+
+    @PutMapping("/me")
+    public CurrentUserDTO updateOwnProfile(@Valid @RequestBody UpdateProfileRequest request) {
+        User currentUser = getAuthenticatedUserEntity();
+        User updated = usersService.updateOwnProfile(currentUser.getId(), request);
+        return CurrentUserDTO.fromUser(updated);
+    }
+
+    @PutMapping("/me/password")
+    public CurrentUserDTO updateOwnPassword(@Valid @RequestBody ChangePasswordRequest request) {
+        User currentUser = getAuthenticatedUserEntity();
+        User updated = usersService.changePassword(currentUser.getId(), request.getCurrentPassword(), request.getNewPassword());
         return CurrentUserDTO.fromUser(updated);
     }
 

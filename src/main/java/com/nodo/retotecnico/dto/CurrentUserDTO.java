@@ -19,6 +19,7 @@ public class CurrentUserDTO {
     private String role;
     private Boolean betaTester;
     private Integer completedChallenges;
+    private Boolean hasPassword;
 
     public static CurrentUserDTO fromUser(User user) {
         return new CurrentUserDTO(
@@ -30,7 +31,8 @@ public class CurrentUserDTO {
             user.getCountry(),
             user.getRole(),
             user.getBetaTester(),
-            user.getCompletedChallenges()
+            user.getCompletedChallenges(),
+            user.getPassword() != null && !user.getPassword().isEmpty()
         );
     }
 }

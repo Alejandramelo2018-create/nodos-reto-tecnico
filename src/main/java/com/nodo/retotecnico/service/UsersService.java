@@ -3,6 +3,7 @@ package com.nodo.retotecnico.service;
 import java.util.List;
 
 import com.nodo.retotecnico.dto.RegisterRequest;
+import com.nodo.retotecnico.dto.UpdateProfileRequest;
 import com.nodo.retotecnico.model.User;
 
 public interface  UsersService {
@@ -18,4 +19,6 @@ public interface  UsersService {
     void processOAuthPostLogin(String username, String email, String name, String firstName, String lastName);
     User updateBetaTester(Integer id, Boolean betaTester);
     Integer getCompletedChallenges(Integer id);
+    User updateOwnProfile(Integer id, UpdateProfileRequest request);
+    User changePassword(Integer id, String currentPassword, String newPassword);
 }
