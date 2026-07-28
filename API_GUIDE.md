@@ -17,7 +17,7 @@ Referencia completa de endpoints para integrar el frontend (`http://localhost:51
 | 400 | Falla de validación (`@Valid` en el body, ej. registro) | `{"campo": "mensaje", ...}` — un mapa por cada campo inválido |
 | 401 | Sin token / token inválido / token invalidado por logout | `{"error": "Token invalidated"}` (para token invalidado) o body vacío según el caso |
 | 401 | Login con credenciales incorrectas | `"Credenciales inválidas"` (string plano) |
-| 401 | Acción bloqueada por una validación de negocio dentro de un controller (ej. no ser dueño de una compra, o no ser ADMIN para finalizar un reto) | el mensaje de la excepción, en texto plano (ver nota abajo) |
+| 401 | Acción bloqueada por una validación de negocio dentro de un controller (ej. no ser dueño de una compra, no ser ADMIN para finalizar un reto, o `currentPassword` incorrecta en `PUT /auth/me/password`) | el mensaje de la excepción, en texto plano (ver nota abajo) |
 | 403 | Token válido pero rol insuficiente **según `SecurityConfig`** (ej. `POST /nodos/expansionpacks/create` sin rol ADMIN) | `{"timestamp":"...","status":403,"error":"Forbidden","path":"/..."}` (formato default de Spring) |
 | 302 | Acceso **sin token** a un endpoint protegido | Redirect a una página de login HTML generada por Spring, **no JSON**. Ver nota abajo. |
 | 500 | Cualquier excepción no controlada (`GlobalExceptionHandler`) | `"Internal error: <mensaje de la excepción>"` (string plano) |
@@ -30,7 +30,7 @@ Referencia completa de endpoints para integrar el frontend (`http://localhost:51
 
 ---
 
-## Auth (`/auth`) — público, excepto `GET /me` y `PUT /me/betatester`
+## Auth (`/auth`) — público, excepto `GET /me`, `PUT /me`, `PUT /me/betatester` y `PUT /me/password`
 
 | Método | Ruta | Body | Respuesta 200 |
 |---|---|---|---|
@@ -39,7 +39,9 @@ Referencia completa de endpoints para integrar el frontend (`http://localhost:51
 | POST | `/auth/register-admin` | igual que register | `"Admin user created"` o `"User promoted to admin"` (string plano) |
 | POST | `/auth/logout` | — (header `Authorization`) | `"Logout exitoso"` |
 | GET | `/auth/me` | — (requiere `Authorization: Bearer <token>`) | `200` + usuario autenticado (ver abajo) |
+| PUT | `/auth/me` | `{"firstName","lastName","email","country"}` (requiere `Authorization: Bearer <token>`) | `200` + usuario autenticado actualizado (ver abajo) |
 | PUT | `/auth/me/betatester` | `true`/`false` (boolean JSON plano, requiere `Authorization: Bearer <token>`) | `200` + usuario autenticado actualizado (ver abajo) |
+| PUT | `/auth/me/password` | `{"currentPassword","newPassword"}` (`currentPassword` opcional, ver nota; requiere `Authorization: Bearer <token>`) | `200` + usuario autenticado actualizado (ver abajo) |
 | GET | `/auth/oauth2/success` | — (requiere sesión OAuth2 activa) | `{"token","message","provider","email","name"}` |
 | GET | `/oauth2/authorization/google` | — | 302 redirect a Google |
 | GET | `/oauth2/authorization/meta` | — | 302 redirect a Facebook |
@@ -48,7 +50,7 @@ Tras un login OAuth2 exitoso, Spring redirige directo al **frontend** (no a `/au
 
 ### `GET /auth/me`
 
-Uno de los dos endpoints de `/auth/**` que requieren estar autenticado (el otro es `PUT /auth/me/betatester`, ver más abajo) — pensado para que el frontend obtenga el `id` numérico del usuario logueado (necesario, por ejemplo, para armar `{"user":{"id":...}}` al llamar `POST /nodos/subscriptionchallenges/create`, ya que `/nodos/users/**` es ADMIN-only y no sirve para que un usuario normal se autoconsulte).
+Uno de los cuatro endpoints de `/auth/**` que requieren estar autenticado (los otros son `PUT /auth/me`, `PUT /auth/me/betatester` y `PUT /auth/me/password`, ver más abajo) — pensado para que el frontend obtenga el `id` numérico del usuario logueado (necesario, por ejemplo, para armar `{"user":{"id":...}}` al llamar `POST /nodos/subscriptionchallenges/create`, ya que `/nodos/users/**` es ADMIN-only y no sirve para que un usuario normal se autoconsulte).
 
 **Respuesta real** (`CurrentUserDTO`, sin `password` ni los campos internos de `UserDetails`):
 ```json
@@ -61,15 +63,36 @@ Uno de los dos endpoints de `/auth/**` que requieren estar autenticado (el otro 
   "country": "Colombia",
   "role": "ROLE_USER",
   "betaTester": false,
-  "completedChallenges": 0
+  "completedChallenges": 0,
+  "hasPassword": true
 }
 ```
 
-> ⚠️ **Sin token o token malformado → 302** (no 401), exactamente igual que cualquier otro endpoint protegido de la app — ver la nota de "sin token en un endpoint protegido" al inicio de esta guía. La única forma de obtener un **401** JSON limpio en esta ruta es con un token que **sí es válido pero fue invalidado por logout** (`{"error": "Token invalidated"}`), igual que en el resto de la API. Verificado en vivo: token ausente → 302 a `/login`; token con formato inválido → 302 a `/login`; token deslogueado → 401. No se agregó un `AuthenticationEntryPoint` especial solo para esta ruta porque hubiera sido una inconsistencia respecto al resto de la API — si se necesita un verdadero 401 para "sin token" en toda la app, es un cambio más amplio a `SecurityConfig`, no algo específico de `/auth/me`.
+`hasPassword` es nuevo: indica si el usuario tiene una contraseña propia guardada (`true` para cuentas registradas con `/auth/register`) o no (`false` para cuentas creadas solo por OAuth2/Google/Meta, donde `User.password` queda como `""`). Sirve para que el frontend sepa con certeza si debe mostrar "agregar contraseña" o "cambiar contraseña" en el perfil, sin depender de si la sesión actual entró por password o por OAuth2 (una misma cuenta puede haber usado ambos alguna vez).
+
+> ⚠️ **Sin token o token malformado → 302** (no 401), exactamente igual que cualquier otro endpoint protegido de la app — ver la nota de "sin token en un endpoint protegido" al inicio de esta guía. La única forma de obtener un **401** JSON limpio en esta ruta es con un token que **sí es válido pero fue invalidado por logout** (`{"error": "Token invalidated"}`), igual que en el resto de la API. Verificado en vivo: token ausente → 302 a `/login`; token con formato inválido → 302 a `/login`; token deslogueado → 401. No se agregó un `AuthenticationEntryPoint` especial solo para esta ruta porque hubiera sido una inconsistencia respecto al resto de la API — si se necesita un verdadero 401 para "sin token" en toda la app, es un cambio más amplio a `SecurityConfig`, no algo específico de `/auth/me`. **Los otros tres endpoints de esta sección (`PUT /me`, `/me/betatester`, `/me/password`) comparten exactamente este mismo comportamiento** — no se repite la nota en cada uno.
+
+### `PUT /auth/me`
+
+Igual que `GET /auth/me`, identifica al usuario por el JWT (no recibe `id` por path). Actualiza **solo** `firstName`, `lastName`, `email` y `country` del usuario autenticado — `username` y `role` no se pueden cambiar por acá. Valida con las mismas reglas que `/auth/register` (`firstName`/`lastName` solo letras y espacios, `email` con formato válido, `country` 2-56 caracteres) → `400` con mapa de errores si falla.
+
+**Body de ejemplo:**
+```json
+{
+  "firstName": "Profile",
+  "lastName": "Updated",
+  "email": "newemail@example.com",
+  "country": "Mexico"
+}
+```
+
+**Respuesta real** (`CurrentUserDTO` actualizado, mismo shape que `GET /auth/me`).
+
+> A diferencia de `PUT /nodos/users/{id}` (que solo actualiza `name`/`email` y descarta el resto silenciosamente), este endpoint sí aplica los 4 campos completos. Internamente también actualiza el campo interno `name` (`firstName + " " + lastName`) para que quede consistente con lo que ya se muestra en `Cart`/`Buy` — no es un campo separado que el frontend controle. No valida que el nuevo `email` sea único (a diferencia del registro) — no se pidió esa restricción.
 
 ### `PUT /auth/me/betatester`
 
-Igual que `GET /auth/me`, identifica al usuario por el JWT (no recibe `id` por path). Permite que **cualquier usuario autenticado** active o cancele su propia inscripción a beta testing, sin necesitar rol ADMIN — pensado para que más adelante el usuario pueda cancelarla por su cuenta. Body: booleano JSON plano (`true`/`false`), igual formato que ya usa `PUT /nodos/users/{id}/betatester`.
+Permite que **cualquier usuario autenticado** active o cancele su propia inscripción a beta testing, sin necesitar rol ADMIN — pensado para que más adelante el usuario pueda cancelarla por su cuenta. Body: booleano JSON plano (`true`/`false`), igual formato que ya usa `PUT /nodos/users/{id}/betatester`.
 
 **Respuesta real** (`CurrentUserDTO`, mismo shape que `GET /auth/me`):
 ```json
@@ -82,13 +105,25 @@ Igual que `GET /auth/me`, identifica al usuario por el JWT (no recibe `id` por p
   "country": "Colombia",
   "role": "ROLE_USER",
   "betaTester": true,
-  "completedChallenges": 0
+  "completedChallenges": 0,
+  "hasPassword": true
 }
 ```
 
 > Este endpoint es distinto de `PUT /nodos/users/{id}/betatester` (que sigue existiendo, sin cambios, y sigue siendo **ADMIN-only** — pensado para que un admin fuerce el valor en cualquier usuario por su `id`). `PUT /auth/me/betatester` es el equivalente de autoservicio: solo puede cambiar el `betaTester` del usuario dueño del token, nunca el de otro. Verificado en vivo que ambos coexisten sin pisarse: un usuario normal recibe `403` al intentar `PUT /nodos/users/{id}/betatester` (regla de `SecurityConfig` por rol), pero `200` en `PUT /auth/me/betatester`.
->
-> Mismo comportamiento de 302/401 que `GET /auth/me` para token ausente/inválido/invalidado (ver nota arriba).
+
+### `PUT /auth/me/password`
+
+Cambia la contraseña del usuario autenticado. Body: `{"currentPassword": "...", "newPassword": "..."}`.
+
+- `newPassword` es **obligatoria** y sigue las mismas reglas que `/auth/register` (8-50 caracteres, mayúscula + minúscula + número + carácter especial) → `400` con mapa de errores si no cumple.
+- `currentPassword` es **opcional según el estado de la cuenta**:
+  - Si el usuario **ya tiene una contraseña** (`hasPassword: true` en `GET /auth/me`) — el caso normal de una cuenta registrada por `/auth/register` —, `currentPassword` es obligatoria y se valida contra el hash guardado (`PasswordEncoder.matches`). Si falta o no coincide, la respuesta es **401** `"La contraseña actual no coincide."` (mismo mecanismo de `AccessDeniedException` → 401 ya documentado al inicio de esta guía, no el 403 de `SecurityConfig`).
+  - Si el usuario **no tiene contraseña** (`hasPassword: false` — cuenta creada solo por Google/Meta OAuth2, donde `User.password` queda `""`), `currentPassword` se puede omitir por completo y la nueva contraseña se guarda directamente, sin validar nada contra la anterior.
+
+**Respuesta real** (`CurrentUserDTO` actualizado, mismo shape que `GET /auth/me` — incluye `hasPassword: true` una vez seteada la contraseña).
+
+> Verificado en vivo (caso "usuario con contraseña"): `currentPassword` incorrecta o ausente → `401`; `currentPassword` correcta → `200` y la nueva contraseña ya sirve para `POST /auth/login`. El caso "usuario sin contraseña" (cuenta 100% OAuth2) se validó por lectura de código, no en vivo — requeriría un login real por Google/Meta para generar esa cuenta, que no es reproducible por curl en este entorno; la lógica es simétrica y usa el mismo booleano `hasPassword` ya verificado en `GET /auth/me`.
 
 **Validaciones de `/auth/register`** (400 si fallan, un mensaje por campo):
 - `username`: 3-30 caracteres, solo letras/números/`_`
@@ -329,7 +364,7 @@ Relaciona un `User` con un `Challenge` (tabla `subscription_challenge`). Requier
 
 | Recurso | Público | Requiere login | Requiere rol ADMIN |
 |---|---|---|---|
-| `/auth/**`, `/oauth2/**` | Todo excepto `GET /auth/me` y `PUT /auth/me/betatester` | `GET /auth/me`, `PUT /auth/me/betatester` | — |
+| `/auth/**`, `/oauth2/**` | Todo excepto `GET /auth/me`, `PUT /auth/me`, `PUT /auth/me/betatester`, `PUT /auth/me/password` | `GET /auth/me`, `PUT /auth/me`, `PUT /auth/me/betatester`, `PUT /auth/me/password` | — |
 | `/nodos/contents` | GET | — | POST/PUT/DELETE |
 | `/nodos/platform` | GET | — | POST/PUT/DELETE |
 | `/nodos/expansionpacks` | GET | — | POST/PUT/DELETE |
