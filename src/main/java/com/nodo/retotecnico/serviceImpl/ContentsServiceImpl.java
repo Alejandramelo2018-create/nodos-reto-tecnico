@@ -26,6 +26,11 @@ public class ContentsServiceImpl implements ContentsService{
     }
 
     @Override
+    public List<Content> getContentsBySection(String section) {
+        return contentsRepository.findBySectionAndDeletedFalseOrderByDisplayOrderAsc(section);
+    }
+
+    @Override
     public Integer createContent(Content content) {
         return contentsRepository.save(content).getId();
     }
@@ -34,8 +39,15 @@ public class ContentsServiceImpl implements ContentsService{
     public Content updateContent(Integer id, Content content){
         Content existingContent = contentsRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Content not found"));
+        existingContent.setSection(content.getSection());
         existingContent.setTitle(content.getTitle());
         existingContent.setDescription(content.getDescription());
+        existingContent.setImage(content.getImage());
+        existingContent.setFieldName(content.getFieldName());
+        existingContent.setFieldType(content.getFieldType());
+        existingContent.setRequired(content.getRequired());
+        existingContent.setOptions(content.getOptions());
+        existingContent.setDisplayOrder(content.getDisplayOrder());
         return contentsRepository.save(existingContent);
     }
     @Override
@@ -46,4 +58,3 @@ public class ContentsServiceImpl implements ContentsService{
         contentsRepository.deleteById(id);
     }
 }
-

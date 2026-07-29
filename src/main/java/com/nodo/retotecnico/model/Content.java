@@ -27,4 +27,12 @@ public class Content {
     private String image;
     private Boolean deleted = false;
 
+    
+    private String fieldName;
+    private String fieldType;
+    private Boolean required = false;
+    @Column(columnDefinition = "TEXT")
+    private String options;
+    private Integer displayOrder;
+
 }
