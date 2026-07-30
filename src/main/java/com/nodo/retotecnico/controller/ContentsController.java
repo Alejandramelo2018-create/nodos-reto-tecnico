@@ -32,6 +32,11 @@ public class ContentsController {
     public Content getContentsById(@PathVariable Integer id) {
         return contentsService.getContentsById(id);
     }
+
+    @GetMapping("/section/{section}")
+    public List<Content> getContentsBySection(@PathVariable String section) {
+        return contentsService.getContentsBySection(section);
+    }
     @PostMapping("/create")
     public Integer createContent(@RequestBody Content content) {
         try {
@@ -50,4 +55,4 @@ public class ContentsController {
         contentsService.deleteContent(id);
         return ResponseEntity.ok("Content deleted successfully");
     }
-}   
+}

@@ -98,7 +98,7 @@ class BackendIntegrationTest {
                 .content("""
                         {
                           "username": "%s",
-                          "password": "incorrect"
+                          "password": "StrongPass1!"
                         }
                         """.formatted(username)))
                 .andExpect(status().isOk())
@@ -254,7 +254,7 @@ class BackendIntegrationTest {
     }
 
     @Test
-    void contentsDeleteExistingReturnsInternalErrorCurrentBehavior() throws Exception {
+    void contentsDeleteExistingWorks() throws Exception {
         String token = tokenForUser(unique("contentUser"));
 
         Content content = new Content();
@@ -267,20 +267,19 @@ class BackendIntegrationTest {
 
         mockMvc.perform(delete("/nodos/contents/" + savedId)
                 .header("Authorization", bearer(token)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("Internal error")));
+                .andExpect(status().isOk());
     }
 
     @Test
-    void usersDeleteExistingReturnsInternalErrorCurrentBehavior() throws Exception {
+    void usersDeleteExistingWorks() throws Exception {
         String token = tokenForUser(unique("adminLike"));
         User target = persistUser(unique("target"), unique("target") + "@example.com");
         Integer targetId = (Integer) ReflectionTestUtils.getField(target, "id");
 
         mockMvc.perform(delete("/nodos/users/" + targetId)
                 .header("Authorization", bearer(token)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("Internal error")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("User deleted successfully")));
     }
 
     @Test
@@ -318,20 +317,20 @@ class BackendIntegrationTest {
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.total").value(15.75));
 
-        mockMvc.perform(post("/nodos/cart/remove")
+        mockMvc.perform(delete("/nodos/cart/remove")
                 .param("expansionId", packId.toString())
                 .header("Authorization", bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(0))
                 .andExpect(jsonPath("$.total").value(0.0));
 
-        mockMvc.perform(post("/nodos/cart/clear")
+        mockMvc.perform(delete("/nodos/cart/clear")
                 .header("Authorization", bearer(token)))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void buysEndpointsFailWithJwtBecauseControllerExpectsOAuth2Principal() throws Exception {
+    void buysEndpointsWorkWithJwt() throws Exception {
         String username = unique("buyJwtUser");
         String token = tokenForUser(username);
         User user = userRepository.findByUsername(username).orElseThrow();
@@ -353,13 +352,11 @@ class BackendIntegrationTest {
 
         mockMvc.perform(get("/nodos/buys")
                 .header("Authorization", bearer(token)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("Usuario no autenticado")));
+                .andExpect(status().isOk());
 
         mockMvc.perform(get("/nodos/buys/" + buyId)
                 .header("Authorization", bearer(token)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("Usuario no autenticado")));
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -402,7 +399,11 @@ class BackendIntegrationTest {
 
     private String tokenForUser(String username) throws Exception {
         if (userRepository.findByUsername(username).isEmpty()) {
-            persistUser(username, username + "@example.com");
+            String role = "ROLE_USER";
+            if (username.contains("admin") || username.contains("Admin") || username.contains("expUser") || username.contains("platformUser") || username.contains("contentUser")) {
+                role = "ROLE_ADMIN";
+            }
+            persistUser(username, username + "@example.com", role);
         }
 
         String loginResponse = mockMvc.perform(post("/auth/login")
@@ -410,7 +411,7 @@ class BackendIntegrationTest {
                 .content("""
                         {
                           "username": "%s",
-                          "password": "anything"
+                          "password": "StrongPass1!"
                         }
                         """.formatted(username)))
                 .andExpect(status().isOk())
@@ -421,6 +422,10 @@ class BackendIntegrationTest {
     }
 
     private User persistUser(String username, String email) {
+        return persistUser(username, email, "ROLE_USER");
+    }
+
+    private User persistUser(String username, String email, String role) {
         User user = new User();
         ReflectionTestUtils.setField(user, "username", username);
         ReflectionTestUtils.setField(user, "password", passwordEncoder.encode("StrongPass1!"));
@@ -428,7 +433,7 @@ class BackendIntegrationTest {
         ReflectionTestUtils.setField(user, "firstName", "Integration");
         ReflectionTestUtils.setField(user, "lastName", "User");
         ReflectionTestUtils.setField(user, "country", "Argentina");
-        ReflectionTestUtils.setField(user, "role", "USER");
+        ReflectionTestUtils.setField(user, "role", role);
         ReflectionTestUtils.setField(user, "email", email);
         ReflectionTestUtils.setField(user, "registrationDate", new Date());
         return userRepository.save(user);
