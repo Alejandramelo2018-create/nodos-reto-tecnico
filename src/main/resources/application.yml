@@ -40,7 +40,8 @@ spring:
             user-name-attribute: id
 
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${PORT:10000}
+  address: 0.0.0.0
 
 jwt:
   secret: ${JWT_SECRET:default_secret_key_please_change}

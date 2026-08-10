@@ -14,8 +14,7 @@ WORKDIR /app
 
 COPY --from=build /workspace/target/*.jar /app/app.jar
 
-EXPOSE 8081
-ENV SERVER_PORT=8081
+EXPOSE 10000
 
 # Ajustado para caber en el plan free de Render (512MB RAM / 0.1 CPU):
 # heap y metaspace acotados, GC serial (menor overhead que G1 con heaps chicos)
